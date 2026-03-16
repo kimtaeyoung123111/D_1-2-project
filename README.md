@@ -18,7 +18,7 @@
 
 ### 1-2. 플로우 차트 (Flow Chart)
 <p align="center">
-  <img src="./src/images/flowchart_drawio.svg" alt="플로우 차트 이미지" width="300" height="300">
+  <img src="./flow_chart.png" alt="플로우 차트 이미지" width="300" height="300">
 </p>
 
 * *설명: [음성 주문(STT) ➡️ 박스 탐색 ➡️ 상품 탐색(ROI & 2-Step 검증) ➡️ 적응형 파지 ➡️ 충돌 회피 적재 ➡️ 박스 정렬(Shaking) ➡️ 교체] 로 이어지는 무한 루프 자동화 프로세스입니다.*
@@ -73,30 +73,38 @@
 | Arduino Uno | 1 | 컨베이어 벨트 시리얼 제어용 |
 
 ### 의존성 (Dependencies)
+```
 pip install opencv-python numpy scipy ultralytics pymodbus pyserial flask
-
+```
 
 5. ▶️ 실행 순서 (Usage Guide)
 시스템이 두 PC로 나뉘어 구동되므로, 각각의 장치에서 아래 순서대로 실행합니다.
 
 💻 A. 로봇/비전 PC 실행
+```
 # Step 1. 로봇 및 카메라 초기화
 ros2 launch dsr_bringup2 dsr_bringup2_rviz.launch.py mode:=real host:=192.168.137.100 port:=12345 model:=m0609
 
 ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true
-
+```
+```
 # Step 2. 비전 탐지 노드 실행
 ros2 run pick_test detection_opencv
-
+```
+```
 # Step 3. 로봇 메인 제어 노드 실행
 ros2 run pick_test robot_move_wh
-
+```
 💻 B. Web Hub PC 실행 (터미널 3개 필요)
+```
 # Step 1. 컨베이어 벨트 노드 실행 (아두이노 시리얼 통신)
 ros2 run pick_test belt_control_node
-
+```
+```
 # Step 2. 음성 인식(STT) 노드 실행
 python3 src/pick_test/ros_nodes/get_keyword.py
-
+```
+```
 # Step 3. 웹 서버(POS) 실행
 python3 src/pick_test/app.py
+```
