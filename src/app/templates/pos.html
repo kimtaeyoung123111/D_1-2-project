@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart POS System</title>
+  <style>
+    :root {
+      --bg: #1a1c1e;
+      --panel: #2d3035;
+      --receipt-bg: #ffffff;
+      --ink: #111111;
+      --brand: #652dc1; /* CU Brand Purple */
+      --accent: #ffcc00;
+      --green: #2ecc71;
+      --red: #e74c3c;
+      --blue: #3498db;
+      --border: #40444b;
+      --text-main: #eeeeee;
+      --text-muted: #95a5a6;
+    }
+
+    * { box-sizing: border-box; -webkit-user-select: none; }
+    body {
+      margin: 0;
+      font-family: 'Pretendard', -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 상단 바 */
+    .header {
+      height: 50px;
+      background: #000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
+      border-bottom: 2px solid var(--brand);
+    }
+    .header .logo { font-weight: 900; color: var(--brand); font-size: 20px; letter-spacing: -1px; }
+    .header .info { display: flex; gap: 15px; font-size: 13px; color: var(--text-muted); }
+    .status-dot { display: inline-block; width: 8px; height: 8px; background: var(--green); border-radius: 50%; margin-right: 5px; }
+
+    /* 메인 그리드 */
+    .main-container {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      flex: 1;
+      gap: 2px;
+      background: var(--border);
+    }
+
+    /* 왼쪽: 영수증 영역 */
+    .receipt-section {
+      background: #d1d5db;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+    }
+    .receipt-paper {
+      background: var(--receipt-bg);
+      flex: 1;
+      border-radius: 4px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .receipt-title {
+      padding: 15px;
+      border-bottom: 2px dashed #ccc;
+      font-weight: 800;
+      font-size: 18px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .receipt-scroll { flex: 1; overflow-y: auto; }
+    
+    table { width: 100%; border-collapse: collapse; font-family: 'Courier New', Courier, monospace; }
+    thead th { position: sticky; top: 0; background: #f8f9fa; padding: 10px; font-size: 13px; text-align: left; border-bottom: 1px solid #ddd; }
+    tbody td { padding: 12px 10px; border-bottom: 1px solid #eee; font-size: 15px; font-weight: 600; }
+    .col-price { text-align: right; }
+    .empty-msg { text-align: center; padding: 50px 0; color: #999; font-family: sans-serif; }
+
+    /* 오른쪽: 제어판 영역 */
+    .control-section {
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      padding: 15px;
+      gap: 15px;
+    }
+
+    /* 총액 표시창 */
+    .display-screen {
+      background: #111;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: right;
+    }
+    .display-screen .label { font-size: 14px; color: var(--accent); margin-bottom: 5px; }
+    .display-screen .total-val { font-size: 48px; font-weight: 900; color: #fff; font-family: 'Digital', monospace; }
+    .display-screen .count { font-size: 16px; color: var(--text-muted); border-top: 1px solid #333; margin-top: 10px; padding-top: 10px; }
+
+    /* 버튼 그리드 */
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      flex: 1;
+    }
+    .pos-btn {
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.1s, transform 0.1s;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+    }
+    .pos-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.2); }
+    .pos-btn span { font-size: 12px; margin-top: 5px; opacity: 0.7; }
+
+    .btn-pay { background: var(--green); grid-column: span 2; height: 100px; font-size: 24px; }
+    .btn-void { background: var(--red); }
+    .btn-clear { background: #555; }
+    .btn-admin { background: var(--blue); }
+    .btn-member { background: #8e44ad; }
+
+    /* 시스템 로그 */
+    .sys-log {
+      background: rgba(0,0,0,0.3);
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--accent);
+      font-family: monospace;
+    }
+
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--accent); color: #000; padding: 12px 30px;
+      border-radius: 50px; font-weight: 800; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      z-index: 100; display: none;
+    }
+
+    /* 결제 확인 모달 */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+    .modal {
+      width: min(520px, 92vw);
+      background: #1f2226;
+      border: 2px solid var(--brand);
+      border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      padding: 22px;
+    }
+    .modal h2 {
+      margin: 0 0 10px 0;
+      font-size: 26px;
+      letter-spacing: -0.5px;
+    }
+    .modal p {
+      margin: 0 0 18px 0;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .modal-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .modal-actions button{
+      border: none;
+      border-radius: 10px;
+      padding: 14px 12px;
+      font-weight: 900;
+      font-size: 18px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.25);
+    }
+    .modal-actions button:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+    .btn-confirm { background: var(--green); color: #fff; }
+    .btn-cancel { background: #555; color: #fff; }
+
+  
+    .discount-info{
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-main);
+      line-height: 1.5;
+    }
+    .btn-member.active{
+      outline: 2px solid var(--accent);
+      box-shadow: 0 0 0 2px rgba(255,204,0,0.25);
+    }
+
+  .voice-btn{
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .voice-btn.active{ background: rgba(46,204,113,0.25); }
+  .voice-btn.err{ background: rgba(231,76,60,0.25); }
+
+/* Voice monitor (debug-friendly) */
+.voice-mon{display:flex;align-items:center;gap:8px;margin-left:8px;font-size:12px;color:#dfe7ff;opacity:.95}
+.voice-mon .dot{width:10px;height:10px;border-radius:50%;background:var(--gray);display:inline-block;box-shadow:0 0 0 2px rgba(255,255,255,.08) inset}
+#sttPanel{position:fixed;left:12px;bottom:12px;z-index:9999;width:360px;pointer-events:none;
+  background:rgba(0,0,0,.78);color:#fff;padding:10px 12px;border-radius:12px;
+  font-size:12px;line-height:1.35;white-space:pre-wrap}
+#sttPanel .row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+#sttPanel .badge{padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.12)}
+#sttPanel .small{opacity:.9}
+
+</style>
+</head>
+<body>
+
+<!-- Wakeword runtime badge -->
+<div style="padding:10px; border:1px solid #ddd; border-radius:10px; margin:10px 0;">
+  Wakeword: <span id="wakeBadge" style="padding:4px 8px;border-radius:999px;background:#eee;">idle</span>
+  <div style="margin-top:6px; font-size:12px; opacity:0.8;">
+    last: <span id="wakeTime">-</span> /
+    conf: <span id="wakeConf">-</span>
+  </div>
+</div>
+
+
+  <div class="header">
+    <div class="logo">CU <span style="color:#fff; font-size:14px; margin-left:10px;">SMART POS</span></div>
+    <div class="info">
+      <div><span class="status-dot"></span><span id="net">NETWORK ONLINE</span></div>
+      <div id="clock">00:00:00</div>
+      <button id="btnVoice" class="voice-btn" onclick="toggleVoice()">🎙️ 브라우저 마이크(선택)</button>
+      <div id="voiceMon" class="voice-mon"><span class="dot" id="voiceDot"></span><span id="voiceMonText">VOICE OFF</span></div>
+      <div>POS-001 | 담당자: 관리자</div>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <div class="receipt-section">
+      <div class="receipt-paper">
+        <div class="receipt-title">
+          <span>판매 품목</span>
+          <span style="font-size:12px; color:#666;">/detected_product</span>
+        </div>
+        <div class="receipt-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th width="40">No</th>
+                <th>상품명</th>
+                <th class="col-price" width="100">금액</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr>
+                <td colspan="3" class="empty-msg">스캔된 상품이 없습니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="control-section">
+      <div class="display-screen">
+        <div class="label">결제하실 금액 (TOTAL)</div>
+        <div class="total-val" id="total">0</div>
+        <div class="discount-info" id="discountInfo" style="display:none;">
+          <div>정상가: <span id="origTotal">0</span>원</div>
+          <div>멤버십 할인(10%): -<span id="discountAmt">0</span>원</div>
+          <div style="margin-top:6px; font-weight:800;">고객 결제금액: <span id="payTotal">0</span>원</div>
+        </div>
+        <div class="count">등록 상품: <span id="count">0</span>개</div>
+      </div>
+
+      <div class="button-grid">
+        <button class="pos-btn btn-pay" onclick="pay()">
+          현금/카드 결제
+          <span>F1 - PAYMENT</span>
+        </button>
+        <button class="pos-btn btn-member" id="btnMember" onclick="toggleMembership()">
+          멤버십/할인
+          <span>F2 - MEMBER</span>
+        </button>
+        <button class="pos-btn btn-void" onclick="voidLast()">
+          지정 취소
+          <span>F3 - VOID</span>
+        </button>
+        <button class="pos-btn btn-clear" onclick="clearCart()">
+          전체 취소
+          <span>F4 - CLEAR</span>
+        </button>
+        <button class="pos-btn btn-admin" onclick="goAdmin()">
+          시스템 관리
+          <span>F5 - ADMIN</span>
+        </button>
+      </div>
+
+      <div class="sys-log">
+        &gt; ROS2 Topic: waiting for messages...<br>
+        &gt; pepsi, gum, tuna, spam, cube ready.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 결제 확인 모달 -->
+  
+  <!-- Membership prompt modal (shown before payment confirmation) -->
+<div class="modal-backdrop" id="membershipModal" style="display:none;">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="memberTitle">
+      <h2 id="memberTitle">멤버십 할인 있으십니까?</h2>
+      <p>멤버십/통신사 제휴 할인이 있으면 <b>예</b>를 눌러주세요. (전체 결제금액의 10% 할인)</p>
+      <div class="modal-actions">
+        <button class="btn-confirm" onclick="chooseMembership(true)">예</button>
+        <button class="btn-cancel" onclick="chooseMembership(false)">아니오</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="payModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="payTitle">
+      <h2 id="payTitle">결제하시겠습니까?</h2>
+      <p>로봇으로부터 “더 담을 물건 없음” 신호를 받았습니다. 아래에서 결제를 진행하거나 취소할 수 있습니다.</p>
+      <p id="payAmountLine" style="font-weight:800; margin-top:10px;"></p>
+      <div class="modal-actions">
+        <button class="btn-confirm" onclick="confirmPay()">결제</button>
+        <button class="btn-cancel" onclick="closePayModal()">취소</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="toast" id="toast"></div>
+
+  
+<script>
+let micGranted = false;
+async function requestMicOnce(){
+  if(voiceEnabled){
+    return;
+  }
+  await toggleVoice();
+}
+</script>
+<script>
+    const fmt = new Intl.NumberFormat('ko-KR');
+
+    // ---- Membership discount state (10%) ----
+    let membershipApplied = false;
+    let lastOriginalTotal = 0;
+
+    function calcDiscount(total){
+      // 10% discount, rounded to nearest won
+      const disc = Math.round(total * 0.10);
+      const pay = Math.max(total - disc, 0);
+      return {disc, pay};
+    }
+
+    function renderTotals(originalTotal){
+      lastOriginalTotal = originalTotal;
+
+      const totalEl = document.getElementById('total');
+      const infoEl = document.getElementById('discountInfo');
+      const origEl = document.getElementById('origTotal');
+      const discEl = document.getElementById('discountAmt');
+      const payEl  = document.getElementById('payTotal');
+
+      if(!membershipApplied){
+        // 기본: 할인 없음
+        if(infoEl) infoEl.style.display = 'none';
+        if(totalEl) totalEl.textContent = fmt.format(originalTotal) + '원';
+        const payLine = document.getElementById('payAmountLine');
+        if(payLine) payLine.textContent = `결제 금액: ${fmt.format(originalTotal)}원`;
+        return;
+      }
+
+      const {disc, pay} = calcDiscount(originalTotal);
+      if(infoEl){
+        infoEl.style.display = 'block';
+        if(origEl) origEl.textContent = fmt.format(originalTotal);
+        if(discEl) discEl.textContent = fmt.format(disc);
+        if(payEl)  payEl.textContent  = fmt.format(pay);
+      }
+      if(totalEl) totalEl.textContent = fmt.format(pay) + '원'; // 고객 결제금액을 메인 TOTAL로 표시
+      const payLine = document.getElementById('payAmountLine');
+      if(payLine) payLine.textContent = `결제 금액(멤버십 적용): ${fmt.format(pay)}원  (정상가 ${fmt.format(originalTotal)}원)`;
+    }
+
+    function toggleMembership(){
+      membershipApplied = !membershipApplied;
+      const btn = document.getElementById('btnMember');
+      if(btn){
+        btn.classList.toggle('active', membershipApplied);
+      }
+      renderTotals(lastOriginalTotal);
+      toast(membershipApplied ? "멤버십 할인 적용(-10%)" : "멤버십 할인 해제");
+    }
+
+    const tbody = document.getElementById('tbody');
+    let lastCartCount = 0;
+
+    function setClock(){
+      const d = new Date();
+      document.getElementById('clock').textContent = d.toLocaleTimeString('ko-KR', {hour12:false});
+    }
+    setInterval(setClock, 1000); setClock();
+
+    function toast(msg){
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(()=> el.style.display = 'none', 1500);
+    }
+
+    // ---- One-time unlock for TTS + beep audio (needs a user gesture on many browsers) ----
+    let ttsUnlocked = false;
+    let audioCtx = null;
+
+    function unlockAudioOnce(){
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+
+      if(!audioCtx){
+        audioCtx = new Ctx();
+      }
+      // ✅ 이미 만들어져 있어도 suspended면 계속 resume 시도
+      if(audioCtx.state === 'suspended'){
+        audioCtx.resume().catch(()=>{});
+      }
+    }
+
+    function unlockTTSOnce(){
+      if(ttsUnlocked) return;
+      ttsUnlocked = true;
+      try{
+        if(!('speechSynthesis' in window)) return;
+        // 짧은 발화로 엔진 활성화 (무음에 가깝게)
+        const u = new SpeechSynthesisUtterance(' ');
+        u.lang = 'ko-KR';
+        window.speechSynthesis.speak(u);
+      }catch(e){}
+    }
+
+    // 첫 클릭(터치)에서 한 번만 unlock
+    document.addEventListener('click', ()=>{
+      unlockAudioOnce();
+      unlockTTSOnce();
+    }, { once:true });
+
+    function playBeep(){
+      try{
+        unlockAudioOnce();
+        if(!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine';
+        o.frequency.value = 1200; // barcode-like beep
+        g.gain.value = 0.0001;
+        o.connect(g);
+        g.connect(audioCtx.destination);
+
+        const t0 = audioCtx.currentTime;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.10);
+
+        o.start(t0);
+        o.stop(t0 + 0.11);
+      }catch(e){}
+    }
+
+    // ---- Payment flow: membership prompt -> pay confirm ----
+    
+    let binModalOpen = false;
+
+    function showBinModal(){
+      if(binModalOpen) return;
+      binModalOpen = true;
+      document.getElementById('binModal').style.display = 'flex';
+      try{ speakKorean('박스를 교체해 주세요'); }catch(e){}
+      // start STT yes/no for bin confirmation
+      stopModalSTT();
+      setTimeout(()=> startModalSTT('bin'), 300);
+    }
+    async function closeBinModal(notifyServer=true){
+      binModalOpen = false;
+      document.getElementById('binModal').style.display = 'none';
+      stopModalSTT();
+      if(notifyServer){
+        try{
+          await fetch('/api/modal/bin', {
+            method:'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({answer:'no'})
+          });
+        }catch(e){}
+      }
+    }
+    async function confirmBinReplaced(notifyServer=true){
+      if(notifyServer){
+        try{
+          await fetch('/api/modal/bin', {
+            method:'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({answer:'confirm'})
+          });
+        }catch(e){}
+      }
+      await closeBinModal(false);
+    }
+
+let membershipModalOpen = false;
+let waitingPaymentHandled = false;
+let lastVoiceActionSeq = 0;
+let lastSessionSeq = -1;
+function showMembershipModal(){
+      if(membershipModalOpen) return;
+      membershipModalOpen = true;
+      const modal = document.getElementById('membershipModal');
+      modal.style.display = 'flex';
+      speakKorean('멤버십 할인 있으십니까?');
+      stopModalSTT();
+      setTimeout(()=> startModalSTT('membership'), 250);
+    }
+
+    function closeMembershipModal(){
+      membershipModalOpen = false;
+      const modal = document.getElementById('membershipModal');
+      modal.style.display = 'none';
+      stopModalSTT();
+    }
+
+    function setMembership(applied){
+      membershipApplied = !!applied;
+      const btn = document.getElementById('btnMember');
+      if(btn) btn.classList.toggle('active', membershipApplied);
+      renderTotals(lastOriginalTotal);
+    }
+
+    function chooseMembership(applied, notifyServer=true){
+      setMembership(applied);
+      closeMembershipModal();
+      // 3s gap before payment modal (avoid STT overlap)
+      stopModalSTT();
+      if(notifyServer){
+        fetch('/api/modal/membership', {
+          method:'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({answer: applied ? 'yes' : 'no'})
+        }).catch(()=>{});
+      }
+      setTimeout(()=>{ showPayModal(); }, 800);
+    }
+
+    let payModalOpen = false;
+    let lastSpokenAt = 0;
+
+    function speakKorean(text){
+      try{
+        // 브라우저 정책상 사용자 제스처가 없으면 막힐 수 있음
+        const now = Date.now();
+        if(now - lastSpokenAt < 1500) return;
+        lastSpokenAt = now;
+
+        if(!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const ut = new SpeechSynthesisUtterance(text);
+        ut.lang = 'ko-KR';
+        ut.rate = 1.0;
+        window.speechSynthesis.speak(ut);
+      }catch(e){
+        // 음성 실패는 무시 (UI는 계속 표시)
+      }
+    }
+
+    function showPayModal(){
+      if(payModalOpen) return;
+      payModalOpen = true;
+      const modal = document.getElementById('payModal');
+      modal.style.display = 'flex';
+      speakKorean('결제하시겠습니까?');
+      stopModalSTT();
+      setTimeout(()=> startModalSTT('payment'), 250);
+    }
+
+    async function closePayModal(notifyServer=true){
+      payModalOpen = false;
+      const modal = document.getElementById('payModal');
+      modal.style.display = 'none';
+      stopModalSTT();
+      if(notifyServer){
+        try{
+          await fetch('/api/modal/payment', {
+            method:'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({answer:'no'})
+          });
+        }catch(e){}
+      }
+    }
+
+    async function confirmPay(notifyServer=true){
+      if(notifyServer){
+        try{
+          await fetch('/api/modal/payment', {
+            method:'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({answer:'yes'})
+          });
+        }catch(e){}
+      }
+      await pay();
+      await closePayModal(false);
+    }
+
+    function render(cart, total){
+      if(!cart || cart.length === 0){
+        tbody.innerHTML = `<tr><td colspan="3" class="empty-msg">스캔된 상품이 없습니다.</td></tr>`;
+      } else {
+        let html = "";
+        cart.forEach((p, idx) => {
+          html += `
+            <tr>
+              <td>${idx+1}</td>
+              <td>${p.name}</td>
+              <td class="col-price">${fmt.format(p.price)}</td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+      // 바코드 스캔 효과음: 상품이 추가될 때마다 삑(beep)
+      const newCount = cart ? cart.length : 0;
+      if(newCount > lastCartCount){
+        // 여러 개가 한 번에 들어와도 너무 시끄럽지 않게 1회만
+        playBeep();
+      }
+      lastCartCount = newCount;
+
+      renderTotals(total);
+      document.getElementById('count').textContent = cart ? cart.length : 0;
+    }
+
+    async function poll(){
+      try{
+        const res = await fetch('/api/poll', {cache:'no-store'});
+        const data = await res.json();
+
+        render(data.items || data.cart || [], data.total || 0);
+
+        if((data.session_seq ?? -1) !== lastSessionSeq){
+          lastSessionSeq = (data.session_seq ?? -1);
+          waitingPaymentHandled = false;
+          if(!data.session_active){
+            membershipModalOpen = false;
+            payModalOpen = false;
+            document.getElementById('membershipModal').style.display = 'none';
+            document.getElementById('payModal').style.display = 'none';
+          }
+        }
+
+        if(data.bin_full_trigger){
+          showBinModal();
+        }
+
+        if(data.done_trigger && !waitingPaymentHandled){
+          waitingPaymentHandled = true;
+          showMembershipModal();
+        }
+
+        const voiceSeq = data.voice_action_seq ?? 0;
+        if(voiceSeq > lastVoiceActionSeq){
+          lastVoiceActionSeq = voiceSeq;
+          const action = data.voice_action || '';
+          if(action === 'membership_yes') chooseMembership(true, false);
+          else if(action === 'membership_no') chooseMembership(false, false);
+          else if(action === 'payment_yes') confirmPay(false);
+          else if(action === 'payment_no') closePayModal(false);
+          else if(action === 'bin_confirm') confirmBinReplaced(false);
+        }
+
+        document.getElementById('net').textContent = "NETWORK ONLINE";
+        document.getElementById('net').parentElement.querySelector('.status-dot').style.background = "var(--green)";
+      }catch(e){
+        document.getElementById('net').textContent = "NETWORK OFFLINE";
+        document.getElementById('net').parentElement.querySelector('.status-dot').style.background = "var(--red)";
+      }
+    }
+    async function pay(){
+      const res = await fetch('/api/pay', {
+        method:'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({membership: membershipApplied})
+      });
+      if(res.ok){
+        const data = await res.json();
+        const paid = (data.paid_total ?? data.total);
+        const disc = (data.discount_amount ?? 0);
+        if(disc > 0){
+          toast(`결제 완료: ${fmt.format(paid)}원 (멤버십 -${fmt.format(disc)}원)`);
+        }else{
+          toast(`결제 완료: ${fmt.format(paid)}원`);
+        }
+        speakKorean('결제가 완료되었습니다');
+        membershipApplied = false;
+        const btn = document.getElementById('btnMember');
+        if(btn) btn.classList.remove('active');
+        poll();
+      }else{
+        toast("결제할 품목이 없습니다.");
+      }
+    }
+
+    async function voidLast(){
+      await fetch('/api/void', {method:'POST'});
+      toast("마지막 항목 취소");
+      poll();
+    }
+
+    async function clearCart(){
+      if(confirm("전체 취소하시겠습니까?")){
+        await fetch('/api/clear', {method:'POST'});
+        toast("전체 취소 완료");
+        membershipApplied = false;
+        const btn = document.getElementById('btnMember');
+        if(btn) btn.classList.remove('active');
+        poll();
+      }
+    }
+
+    function goAdmin(){ window.location.href = "/admin"; }
+
+    window.addEventListener('keydown', (e)=>{
+      const keys = { 'F1': pay, 'F2': toggleMembership, 'F3': voidLast, 'F4': clearCart, 'F5': goAdmin };
+      if(keys[e.key]) { e.preventDefault(); keys[e.key](); }
+    });
+  
+// Safe polling loop (prevents overlapping requests)
+async function pollLoop(){
+  await poll();
+  setTimeout(pollLoop, 400);
+}
+pollLoop();
+
+// ------------------------------
+// OpenAI STT (server-side) voice control
+// - One click to grant mic permission
+// - Background loop listens for "계산해줘" (optionally wakeword on server)
+// - When membership/payment modal opens, listen WITHOUT wakeword for yes/no
+// ------------------------------
+let voiceEnabled = false;
+let voiceLoopBusy = false;
+let mediaStream = null;
+
+async function ensureMic(){
+  if(mediaStream) return mediaStream;
+  mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  return mediaStream;
+}
+
+
+let sttPhase = 'idle'; // idle | listening | transcribing | error
+function setSttPhase(p){
+  sttPhase = p;
+  const el = document.getElementById('sttPhase');
+  if(el) el.textContent = p;
+  // also update top voice monitor
+  const t = document.getElementById('voiceMonText');
+  if(t){
+    if(!voiceEnabled) t.textContent = "VOICE OFF";
+    else t.textContent = `VOICE ON · ${p}`;
+  }
+  const dot = document.getElementById('voiceDot');
+  if(dot){
+    if(!voiceEnabled) dot.style.background = "var(--gray)";
+    else if(p === 'listening') dot.style.background = "var(--green)";
+    else if(p === 'transcribing') dot.style.background = "var(--yellow)";
+    else if(p === 'error') dot.style.background = "var(--red)";
+    else dot.style.background = "var(--green)";
+  }
+}
+
+async function refreshSttDebug(){
+  try{
+    const r = await fetch('/api/stt_debug', {cache:'no-store'});
+    const d = await r.json();
+    const ts = document.getElementById('sttTs'); if(ts) ts.textContent = d.last_ts || '--:--:--';
+    const tx = document.getElementById('sttText'); if(tx) tx.textContent = d.last_text || '-';
+    const rs = document.getElementById('sttResult'); if(rs) rs.textContent = d.last_result || '-';
+    const er = document.getElementById('sttErr'); if(er) er.textContent = d.last_error || '-';
+    const c  = document.getElementById('sttConn');
+    if(c){
+      c.textContent = 'STT';
+      c.style.background = (d.last_error ? 'rgba(255,0,0,.25)' : 'rgba(0,255,0,.18)');
+    }
+  }catch(e){
+    const c = document.getElementById('sttConn');
+    if(c){
+      c.textContent = 'STT OFFLINE';
+      c.style.background = 'rgba(255,0,0,.25)';
+    }
+  }
+}
+setInterval(refreshSttDebug, 1000);
+
+function setVoiceBtnState(state){
+  const btn = document.getElementById('btnVoice');
+  if(!btn) return;
+  btn.classList.remove('active','err');
+  if(state === 'on'){ btn.classList.add('active'); btn.textContent = "🎙️ 음성 ON"; }
+  else if(state === 'err'){ btn.classList.add('err'); btn.textContent = "🎙️ 음성 오류"; }
+  else { btn.textContent = "🎙️ 음성 시작"; }
+  // keep monitor in sync
+  if(!voiceEnabled) setSttPhase('idle');
+}
+
+async function recordOnce(ms=1400){
+  const stream = await ensureMic();
+  return new Promise((resolve, reject) => {
+    try{
+      const chunks = [];
+      const rec = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+      rec.onerror = e => reject(e.error || e);
+      rec.onstop = () => resolve(new Blob(chunks, { type: 'audio/webm' }));
+      rec.start();
+      setTimeout(()=>{ try{ rec.stop(); }catch(_){} }, ms);
+    }catch(e){ reject(e); }
+  });
+}
+
+async function postAudio(endpoint, blob){
+  const fd = new FormData();
+  fd.append('audio', blob, 'audio.webm');
+  const res = await fetch(endpoint, { method:'POST', body: fd });
+  return await res.json();
+}
+
+async function toggleVoice(){
+  voiceEnabled = !voiceEnabled;
+  if(voiceEnabled){
+    try{
+      await ensureMic(); // permission
+      setVoiceBtnState('on');
+      setSttPhase('idle');
+      voiceLoop();
+    }catch(e){
+      console.error(e);
+      voiceEnabled = false;
+      setVoiceBtnState('err');
+      setSttPhase('error');
+      alert("마이크 권한이 필요합니다. 브라우저 권한을 허용해 주세요.");
+    }
+  }else{
+    setVoiceBtnState('off');
+    setSttPhase('idle');
+  }
+}
+
+async function voiceLoop(){
+  if(voiceLoopBusy) return;
+  voiceLoopBusy = true;
+  while(voiceEnabled){
+    // 팝업이 떠 있으면(멤버십/결제), 백그라운드 시작어 루프는 잠시 멈춤
+    if(membershipModalOpen || payModalOpen || binModalOpen){
+      await new Promise(r=>setTimeout(r, 300));
+      continue;
+    }
+    try{
+      setSttPhase('listening');
+      const blob = await recordOnce(1300);
+      setSttPhase('transcribing');
+      const data = await postAudio('/api/stt_command', blob);
+      setSttPhase('idle');
+      if(data && data.ok && data.start){
+        // 시작: 장바구니 초기화 + 컨베이어 START + 로봇PC에 /session/start 퍼블리시(서버)
+        await fetch('/api/session_start', { method:'POST' });
+        speakKorean('작업을 시작합니다.');
+      }
+      setVoiceBtnState('on');
+    }catch(e){
+      console.error("voiceLoop error", e);
+      setVoiceBtnState('err');
+      await new Promise(r=>setTimeout(r, 800));
+    }
+    await new Promise(r=>setTimeout(r, 250)); // small gap
+  }
+  voiceLoopBusy = false;
+}
+
+let modalSTTBusy = false;
+
+function stopModalSTT(){
+  // Force-release modal STT state so next modal can start listening
+  modalSTTBusy = false;
+  try{ setSttPhase('idle'); }catch(e){}
+}
+async function startModalSTT(which){
+  if(!voiceEnabled) return;           // 음성 ON일 때만 자동 응답
+  if(modalSTTBusy) return;
+  modalSTTBusy = true;
+
+  const maxTry = 3;
+  for(let i=0;i<maxTry;i++){
+    try{
+      setSttPhase('listening');
+      const blob = await recordOnce(1600);
+      setSttPhase('transcribing');
+      const data = await postAudio('/api/stt_yesno', blob);
+      setSttPhase('idle');
+      if(data && data.ok){
+        if(data.answer === 'yes'){
+          // IMPORTANT: release busy flag BEFORE triggering next modal
+          modalSTTBusy = false;
+          if(which === 'membership'){ chooseMembership(true); return; }
+          if(which === 'bin'){ await confirmBinReplaced(); return; }
+          if(which === 'payment'){ await confirmPay(); return; }
+          return;
+        }
+        if(data.answer === 'no'){
+          modalSTTBusy = false;
+          if(which === 'membership'){ chooseMembership(false); return; }
+          if(which === 'bin'){ modalSTTBusy = false; return; }
+          if(which === 'payment'){ closePayModal(); return; }
+          return;
+        }
+      }
+    }catch(e){
+      console.error("modal STT error", e);
+    }
+    await new Promise(r=>setTimeout(r, 250));
+  }
+  // If unclear, leave modal for manual click
+  modalSTTBusy = false;
+}
+
+</script>
+
+<div id="sttPanel">
+  <div class="row">
+    <span class="badge" id="sttConn">STT</span>
+    <span class="badge" id="sttPhase">idle</span>
+    <span class="small" id="sttTs">--:--:--</span>
+  </div>
+  <div><b>last text</b>: <span id="sttText">-</span></div>
+  <div><b>result</b>: <span id="sttResult">-</span></div>
+  <div><b>error</b>: <span id="sttErr">-</span></div>
+</div>
+
+
+<div id="binModal" class="modal-backdrop" style="display:none;">
+  <div class="modal">
+    <h2>박스를 교체해 주세요</h2>
+    <p style="opacity:0.9;">박스를 교체한 뒤 <b>“확인”</b> 또는 <b>“네”</b>라고 말하거나, 아래 <b>확인</b> 버튼을 눌러 주세요.</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmBinReplaced()">확인</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+async function pollRuntime(){
+  try{
+    const r = await fetch("/api/runtime", {cache:"no-store"});
+    const j = await r.json();
+    const badge = document.getElementById("wakeBadge");
+    const t = document.getElementById("wakeTime");
+    const c = document.getElementById("wakeConf");
+
+    if(badge){
+      badge.textContent = j.session_active ? "ACTIVE" : "idle";
+      badge.style.background = j.session_active ? "#b6f2c2" : "#eee";
+    }
+    if(t) t.textContent = j.last_wakeword_at || "-";
+    if(c) c.textContent = (j.last_wakeword_conf ?? "-");
+  }catch(e){}
+}
+setInterval(pollRuntime, 500);
+pollRuntime();
+</script>
+
+</body>
+</html>

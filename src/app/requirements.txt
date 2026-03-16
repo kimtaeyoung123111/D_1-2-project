@@ -1,0 +1,8 @@
+flask
+openai
+sounddevice
+scipy
+numpy
+pyserial
+pyaudio
+openwakeword

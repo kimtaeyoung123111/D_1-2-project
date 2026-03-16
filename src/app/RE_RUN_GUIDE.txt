@@ -1,0 +1,32 @@
+Re-run guide (after closing terminals)
+
+1) Go to project root and activate venv:
+   cd ~/Downloads/web3_fixed_popup_api_patch
+   source .venv/bin/activate
+
+2) Ensure deps (run once if needed):
+   sudo apt update
+   sudo apt install -y portaudio19-dev python3-dev
+   python -m pip install --upgrade pip setuptools wheel
+   python -m pip install -r requirements.txt
+   python -m pip install openwakeword pyaudio webrtcvad sounddevice
+
+3) (Optional) set OpenAI key for STT (Whisper):
+   export OPENAI_API_KEY="YOUR_KEY"
+
+4) Terminal A: start Flask web server (UI)
+   cd ~/Downloads/web3_fixed_popup_api_patch
+   python app.py
+
+5) Terminal B: start ROS listener (bridges ROS topics -> Flask /api/poll state)
+   cd ~/Downloads/web3_fixed_popup_api_patch
+   python ros_listener.py
+
+6) Terminal C: start wakeword+STT node
+   cd ~/Downloads/web3_fixed_popup_api_patch/ros_nodes
+   python get_keyword.py
+
+Notes:
+- Wakeword model is bundled at: ros_nodes/voice_processing/models/hello_rokey_8332_32.tflite
+- You can override it with:
+   export WAKEWORD_MODEL_PATH=/full/path/to/your_model.tflite
